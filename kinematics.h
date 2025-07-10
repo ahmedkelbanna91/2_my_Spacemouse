@@ -1,23 +1,12 @@
-#include "esp32-hal-adc.h"
 // This file contains all functions to calculate the kinematics
 
 // The user specific settings, like pin mappings or special configuration variables and sensitivities are stored in config.h.
 // Please open config_sample.h, adjust your settings and save it as config.h
 #include "config.h"
-
 #include <math.h>
+#include <SimpleKalmanFilter.h>
 #define sign(x) ((x) < 0 ? -1 : ((x) > 0 ? 1 : 0))  // Define Signum Function
 
-// The following constants are here for more readable access to the arrays. You don't need to change this values!
-// Axes in centered or rawValues array
-#define AX 0
-#define AY 1
-#define BX 2
-#define BY 3
-#define CX 4
-#define CY 5
-#define DX 6
-#define DY 7
 
 // SECTION HALLEFFECT
 // When using HallE sensors in centered or rawValues array
@@ -39,20 +28,37 @@
 #define ROTY 4
 #define ROTZ 5
 
-
 // define an array for reading the analog pins of the joysticks, see config.h
 int pinList[8] = PINLIST;
 int invertList[8] = INVERTLIST;
 
+
+SimpleKalmanFilter *kalmanFilters[8];
+
+void setupkalmanFilters() {
+  float KalmanFilterValues[3] = { 3.0, 2.0, 0.001 };
+  for (int i = 0; i < 8; i++) {
+    // Parameters: Kalman gain for position, Kalman gain for velocity, measurement error
+    kalmanFilters[i] = new SimpleKalmanFilter(
+      KalmanFilterValues[0],  // measurement error
+      KalmanFilterValues[1],  // estimation error
+      KalmanFilterValues[2]   // process noise (Q)
+    );
+  }
+}
+
 /// @brief Function to read and store analogue voltages for each joystick axis.
 /// @param rawReads pointer to 8 analog values
-void readAllFromJoystick(int *rawReads) {
+void readAllFromSensors(int *rawReads) {
   for (int i = 0; i < 8; i++) {
+    int rawValue = analogRead(pinList[i]);
+    int filteredValue = kalmanFilters[i]->updateEstimate(rawValue);
+    if (fabs(filteredValue) < ANALOG_DEADZONE) filteredValue = 0;
+
     if (invertList[i] == 1) {
-      // invert the reading
-      rawReads[i] = (analogMaxResolution)-analogRead(pinList[i]);
+      rawReads[i] = analogMax_Resolution - filteredValue;  // invert the reading
     } else {
-      rawReads[i] = analogRead(pinList[i]);
+      rawReads[i] = filteredValue;
     }
   }
 }
@@ -82,61 +88,8 @@ void FilterAnalogReadOuts(int *centered) {
   }
 }
 
-/**
- * When using Hall Effect sensors the reading of the sensors has to be translated
- * to the joystick values
-
-
- *     7   6              Y+
- *       |                .
- *  8    |    3           .
- *    ---+---        X-...Z+...X+
- *  9    |    2           .
- *       |                .
- *     0   1              Y-
- *
- *
- *
- * Movement table (expected)
- *
- * Movement     Plane           AX  AY  BX  BY  CX  CY  DX  DY  ||  H0  H1  H2  H3  H6  H7  H8  H9
- * West         Horizontal      0   +   0   0   0   -   0   0   ||  0   0   +   +   0   0   -   -
- * East         Horizontal      0   -   0   0   0   +   0   0   ||  0   0   -   -   0   0   +   +
- * North        Horizontal      0   0   0   -   0   0   0   +   ||  +   +   0   0   -   -   0   0
- * South        Horizontal      0   0   0   +   0   0   0   -   ||  -   -   0   0   +   +   0   0
- * Top          Vertical        -   0   -   0   -   0   -   0   ||  +   +   +   +   +   +   +   +               (all magnets further away)
- * Bottom       Vertical        +   0   +   0   +   0   +   0   ||  -   -   -   -   -   -   -   -               (all magnets closer by)
- * Rotx-fw      Vertical        -   0   0   0   +   0   0   0   ||  +   +   0   0   -   -   0   0
- * Rotx-bw      Vertical        +   0   0   0   -   0   0   0   ||  -   -   0   0   +   +   0   0
- * Roty-left    Vertical        0   0   +   0   0   0   -   0   ||  0   0   +   +   0   0   -   -
- * Roty-right   Vertical        0   0   -   0   0   0   +   0   ||  0   0   -   -   0   0   +   +
- * Rotz-clock   Horizontal      -   0   -   0   -   0   -   0   ||  +   -   +   -   +   -   +   -
- * Rotz-cclock  Horizontal      +   0   +   0   +   0   +   0   ||  -   +   -   +   -   +   -   +
- *
- */
-
-
 void _calculateKinematicSensors(int *centered, int16_t *velocity) {
 
-#ifndef HALLEFFECT
-  // calculate sensors transX
-  velocity[TRANSX] = (-centered[CY] + centered[AY]);
-
-  // calculate sensors transY
-  velocity[TRANSY] = (-centered[BY] + centered[DY]);
-
-  // calculate sensors transZ
-  velocity[TRANSZ] = -centered[AX] - centered[BX] - centered[CX] - centered[DX];
-
-  // rotX
-  velocity[ROTX] = (-centered[CX] + centered[AX]);
-
-  // rotY
-  velocity[ROTY] = (-centered[BX] + centered[DX]);
-
-  // rotZ
-  velocity[ROTZ] = (centered[AY] + centered[BY] + centered[CY] + centered[DY]);
-#else
   // calculate sensors transX
   velocity[TRANSX] = (centered[HES1] - centered[HES0] + centered[HES6] - centered[HES7]) / 2;
 
@@ -154,7 +107,6 @@ void _calculateKinematicSensors(int *centered, int16_t *velocity) {
 
   // rotZ
   velocity[ROTZ] = (centered[HES0] + centered[HES2] + centered[HES6] + centered[HES8] - centered[HES1] - centered[HES3] - centered[HES7] - centered[HES9]) / 4;
-#endif
 }
 
 /// @brief Function to modify the input value according to different mathematic modes. Choose the mathematical function in config.h as modFunc
@@ -296,3 +248,37 @@ void exclusiveMode(int16_t *velocity) {
     velocity[ROTZ] = 0;
   }
 }
+
+
+/**
+ * When using Hall Effect sensors the reading of the sensors has to be translated
+ * to the joystick values
+
+
+ *     7   6              Y+
+ *       |                .
+ *  8    |    3           .
+ *    ---+---        X-...Z+...X+
+ *  9    |    2           .
+ *       |                .
+ *     0   1              Y-
+ *
+ *
+ *
+ * Movement table (expected)
+ *
+ * Movement     Plane           AX  AY  BX  BY  CX  CY  DX  DY  ||  H0  H1  H2  H3  H6  H7  H8  H9
+ * West         Horizontal      0   +   0   0   0   -   0   0   ||  0   0   +   +   0   0   -   -
+ * East         Horizontal      0   -   0   0   0   +   0   0   ||  0   0   -   -   0   0   +   +
+ * North        Horizontal      0   0   0   -   0   0   0   +   ||  +   +   0   0   -   -   0   0
+ * South        Horizontal      0   0   0   +   0   0   0   -   ||  -   -   0   0   +   +   0   0
+ * Top          Vertical        -   0   -   0   -   0   -   0   ||  +   +   +   +   +   +   +   +               (all magnets further away)
+ * Bottom       Vertical        +   0   +   0   +   0   +   0   ||  -   -   -   -   -   -   -   -               (all magnets closer by)
+ * Rotx-fw      Vertical        -   0   0   0   +   0   0   0   ||  +   +   0   0   -   -   0   0
+ * Rotx-bw      Vertical        +   0   0   0   -   0   0   0   ||  -   -   0   0   +   +   0   0
+ * Roty-left    Vertical        0   0   +   0   0   0   -   0   ||  0   0   +   +   0   0   -   -
+ * Roty-right   Vertical        0   0   -   0   0   0   +   0   ||  0   0   -   -   0   0   +   +
+ * Rotz-clock   Horizontal      -   0   -   0   -   0   -   0   ||  +   -   +   -   +   -   +   -
+ * Rotz-cclock  Horizontal      +   0   +   0   +   0   +   0   ||  -   +   -   +   -   +   -   +
+ *
+ */

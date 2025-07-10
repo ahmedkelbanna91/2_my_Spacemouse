@@ -1,9 +1,8 @@
 // The user specific settings, like pin mappings or special configuration variables and sensitivities are stored in config.h.
 // Please open config_sample.h, adjust your settings and save it as config.h
 #include "config.h"
-// check config.h if this functions and variables are needed
-#if NUMKEYS > 0
 
+#if NUMKEYS > 0
 // array with the pin definition of all keys
 int keyList[NUMKEYS] = KEYLIST;
 
@@ -38,10 +37,10 @@ void evalKeys(int* keyVals, uint8_t* keyOut, uint8_t* keyState) {
         keyOut[i] = 1;            // this is the variable telling the outside world only one iteration, that the key was pressed
         keyState[i] = 1;          // remember, that we already told the outside world about this key
         timestamp[i] = millis();  // remember the time, the button was pressed
-        Serial.println("");
-        Serial.print("Key: ");  // this is always sent over the serial console, and not only in debug
-        Serial.print(i);
-        Serial.println("");
+        // Serial.println("");
+        // Serial.print("Key: ");  // this is always sent over the serial console, and not only in debug
+        // Serial.print(i);
+        // Serial.println("");
 
       } else {  // the button was already pressed and is still pressed (and the event sent in the last loop), don't send the keyOut event again.
         keyOut[i] = 0;

@@ -1,10 +1,6 @@
 // File for calibration specific functions
-#include <Arduino.h>
 #include "config.h"
 
-
-// hold characters to plot them
-char debugOutputBuffer[20];
 
 /// @brief Prints an array to the Serial, in order to copy the output again to C-Code. Example output: {-519, -521, -512, -2, -519, -482, -508, -1}
 /// @param arr array to print
@@ -20,18 +16,14 @@ void printArray(int arr[], int size) {
   Serial.println("}");
 }
 
-#ifndef HALLEFFECT
-char const* axisNames[] = { "AX:", "AY:", "BX:", "BY:", "CX:", "CY:", "DX:", "DY:" };  // 8
-#else
-char const* axisNames[] = { "H0:", "H1:", "H2:", "H3:", "H6:", "H7:", "H8:", "H9:" };  // 8
-#endif
-char const* velNames[] = { "TX:", "TY:", "TZ:", "RX:", "RY:", "RZ:" };  // 6
+
+char const* axisNames[] = { "H0:", "H1:", "H2:", "H3:", "H5:", "H6:", "H7:", "H8:" };  // 8
+char const* velNames[] = { "TX:", "TY:", "TZ:", "RX:", "RY:", "RZ:" };                 // 6
 
 /// @brief Check, if a new debug output shall be generated. This is used in order to generate a debug line only every DEBUGDELAY ms, see config.h
 /// @return true, if debug message is due
 bool isDebugOutputDue() {
   static unsigned long lastDebugOutput = 0;  // time from millis(), when the last debug output was given
-
   if (millis() - lastDebugOutput > DEBUGDELAY) {
     lastDebugOutput = millis();
     return true;
@@ -42,28 +34,31 @@ bool isDebugOutputDue() {
 
 void debugOutput1(int* rawReads, int* keyVals) {
   if (isDebugOutputDue()) {
-    // Report back 0-1023 raw ADC 10-bit values if enabled
+    // Report back raw ADC 10-bit values if enabled
     for (int i = 0; i < 8; i++) {
-      sprintf(debugOutputBuffer, "%2.2s: %4d ", axisNames[i], rawReads[i]);
-      Serial.print(debugOutputBuffer);
+      Serial.printf("%2.2s: %4d  ", axisNames[i], rawReads[i]);
     }
+#if NUMKEYS > 0
+    Serial.print("\t");
+#endif
     for (int i = 0; i < NUMKEYS; i++) {
-      Serial.print("K");
-      Serial.print(i);
-      Serial.print(":");
-      Serial.print(keyVals[i]);
-      Serial.print(", ");
+      Serial.printf("K%d: %d  ", i, keyVals[i]);
     }
     Serial.print(DEBUG_LINE_END);
   }
 }
 
-void debugOutput2(int* centered) {
+void debugOutput2(int* centered, int* keyVals) {
   if (isDebugOutputDue()) {
     // this routine creates the output for the former debug = 2 and debug = 3
     for (int i = 0; i < 8; i++) {
-      sprintf(debugOutputBuffer, "%2.2s: %4d ", axisNames[i], centered[i]);
-      Serial.print(debugOutputBuffer);
+      Serial.printf("%2.2s: %4d  ", axisNames[i], centered[i]);
+    }
+#if NUMKEYS > 0
+    Serial.print("\t");
+#endif
+    for (int i = 0; i < NUMKEYS; i++) {
+      Serial.printf("K%d: %d  ", i, keyVals[i]);
     }
     Serial.print(DEBUG_LINE_END);
   }
@@ -76,15 +71,13 @@ void debugOutput4(int16_t* velocity, uint8_t* keyOut) {
   //
   if (isDebugOutputDue()) {
     for (int i = 0; i < 6; i++) {
-      sprintf(debugOutputBuffer, "%2.2s: %4d ", velNames[i], velocity[i]);
-      Serial.print(debugOutputBuffer);
+      Serial.printf("%2.2s: %4d  ", velNames[i], velocity[i]);
     }
+#if NUMKEYS > 0
+    Serial.print("\t");
+#endif
     for (int i = 0; i < NUMKEYS; i++) {
-      Serial.print("K");
-      Serial.print(i);
-      Serial.print(":");
-      Serial.print(keyOut[i]);
-      Serial.print(", ");
+      Serial.printf("K%d: %d  ", i, keyOut[i]);
     }
     Serial.print(DEBUG_LINE_END);
   }
@@ -96,13 +89,13 @@ void debugOutput4(int16_t* velocity, uint8_t* keyOut) {
 void debugOutput5(int* centered, int16_t* velocity) {
   if (isDebugOutputDue()) {
     for (int i = 0; i < 8; i++) {
-      sprintf(debugOutputBuffer, "%2.2s: %4d ", axisNames[i], centered[i]);
-      Serial.print(debugOutputBuffer);
+      Serial.printf("%2.2s: %4d  ", axisNames[i], centered[i]);
     }
-    Serial.print(" || ");
+#if NUMKEYS > 0
+    Serial.print("\t");
+#endif
     for (int i = 0; i < 6; i++) {
-      sprintf(debugOutputBuffer, "%2.2s: %4d ", velNames[i], velocity[i]);
-      Serial.print(debugOutputBuffer);
+      Serial.printf("%2.2s: %4d  ", velNames[i], velocity[i]);
     }
     Serial.print(DEBUG_LINE_END);
   }
@@ -114,16 +107,6 @@ int minValue[8];          // Array to store the minimum values
 int maxValue[8];          // Array to store the maximum values
 unsigned long startTime;  // Start time for the measurement
 
-#ifndef HALLEFFECT
-#define MINMAX_MINWARNING 250
-#define MINMAX_MAXWARNING 250
-#else
-                                                                                       // The Hall effect sensors aren't centered around zero, due to the nature of the hardware.
-                                                                                       // In my version of the Spacemouse, the values vary between -425 and 285, the centerpoint is thus around -70
-                                                                                       // The MIN and MAX warning levels have to be shifted accordingly.
-#define MINMAX_MINWARNING (100 - centerPoint)
-#define MINMAX_MAXWARNING (100 + centerPoint)
-#endif
 
 /// @brief This function records the minimum and maximum movement of the joysticks: After initialization, move the mouse for 15s and see the printed output. Replug/reset the mouse, to enable the semi-automatic calibration for a second time.
 /// @param centered pointer to the array with the centered joystick values
@@ -159,7 +142,7 @@ void calcMinMax(int* centered) {
     printArray(minValue, 8);
     Serial.print(F("#define MAXVALS "));
     printArray(maxValue, 8);
-#ifdef HALLEFFECT
+
     // Calculate and print the ranges for each HALL sensor
     int minmaxRanges[8];
     int max = 0;
@@ -172,25 +155,14 @@ void calcMinMax(int* centered) {
     Serial.print(F("Ranges are: "));
     printArray(minmaxRanges, 8);
     int centerPoint = (max + (min * -1)) / 2;
-    Serial.print(F("Centerpoint: "));
-    Serial.println(centerPoint);
-#endif
+    Serial.printf("Centerpoint: %d\n", centerPoint);
+
     for (int i = 0; i < 8; i++) {
       if (abs(minValue[i]) < MINMAX_MINWARNING) {
-        Serial.print(F("Warning: minValue["));
-        Serial.print(i);
-        Serial.print("] ");
-        Serial.print(axisNames[i]);
-        Serial.print(F(" is small: "));
-        Serial.println(minValue[i]);
+        Serial.printf("Warning: minValue[%d] %2.2s is small: %d\n", i, axisNames[i], minValue[i]);
       }
       if (abs(maxValue[i]) < MINMAX_MAXWARNING) {
-        Serial.print(F("Warning: maxValue["));
-        Serial.print(i);
-        Serial.print("] ");
-        Serial.print(axisNames[i]);
-        Serial.print(F(" is small: "));
-        Serial.println(maxValue[i]);
+        Serial.printf("Warning: maxValue[%d] %2.2s is small: %d\n", i, axisNames[i], maxValue[i]);
       }
     }
     minMaxCalcState = 3;  // no further reporting
@@ -222,18 +194,15 @@ void updateFrequencyReport() {
 bool busyZeroing(int* centerPoints, uint16_t numIterations, boolean debugFlag) {
   bool noWarningsOccured = true;
   if (debugFlag == true)
-#ifndef HALLEFFECT
-    Serial.println(F("Zeroing Joysticks..."));
-#else
     Serial.println(F("Zeroing HALL Sensors..."));
-#endif
+
   int act[8];                                     // actual value
   uint32_t mean[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };  // Array to count all values during the averaging
   int minValue[8];                                // Array to store the minimum values
   int maxValue[8];                                // Array to store the maximum values
   for (int i = 0; i < 8; i++) {
-    minValue[i] = 1023;  // Set the min value to the maximum possible value
-    maxValue[i] = 0;     // Set the max value to the minimum possible value
+    minValue[i] = analogMax_Resolution;  // Set the min value to the maximum possible value
+    maxValue[i] = 0;                     // Set the max value to the minimum possible value
   }
 
   // measure duration
@@ -243,7 +212,7 @@ bool busyZeroing(int* centerPoints, uint16_t numIterations, boolean debugFlag) {
   uint16_t count;
 
   for (count = 0; count < numIterations; count++) {
-    readAllFromJoystick(act);
+    readAllFromSensors(act);
     for (uint8_t i = 0; i < 8; i++) {
       // Add to mean
       mean[i] = mean[i] + act[i];
@@ -268,20 +237,6 @@ bool busyZeroing(int* centerPoints, uint16_t numIterations, boolean debugFlag) {
       maxDeadZone = deadZone[i];
     }
 
-// a dead zone above the following value will be warned
-#define DEADZONEWARNING 10
-#ifndef HALLEFFECT
-// a centerpoint below or above those values will be warned (512 +/- 128)
-#define CENTERPOINTWARNINGMIN 384
-#define CENTERPOINTWARNINGMAX 640
-#else
-    // The centerpoint of the Hall effect mouse is not in the center of the ADC range, due to the hardware nature.
-    // According to the height of the base plate, the centerpoint is shifted up or downwards.
-    // a centerpoint below or above those values will be warned (512 +/- 128)
-#define CENTERPOINTWARNINGMIN (720 - 128)
-#define CENTERPOINTWARNINGMAX (720 + 128)
-#endif
-
     if (deadZone[i] > DEADZONEWARNING || centerPoints[i] < CENTERPOINTWARNINGMIN || centerPoints[i] > CENTERPOINTWARNINGMAX) {
       noWarningsOccured = false;
     }
@@ -291,23 +246,14 @@ bool busyZeroing(int* centerPoints, uint16_t numIterations, boolean debugFlag) {
   if (debugFlag) {
     Serial.println(F("##  Min- Mean - Max -> Dead Zone"));
     for (int i = 0; i < 8; i++) {
-      Serial.print(axisNames[i]);
-      Serial.print(" ");
-      Serial.print(minValue[i]);
-      Serial.print(" - ");
-      Serial.print(centerPoints[i]);
-      Serial.print(" - ");
-      Serial.print(maxValue[i]);
-      Serial.print(" -> ");
-      Serial.print(deadZone[i]);
-      Serial.print(" ");
+      Serial.printf("%2.2s: %d - %d - %d - %d  ", axisNames[i], minValue[i], centerPoints[i], maxValue[i], deadZone[i]);
       if (deadZone[i] > DEADZONEWARNING) {
         Serial.print(F(" Attention! Moved axis?"));
       }
       if (centerPoints[i] < CENTERPOINTWARNINGMIN || centerPoints[i] > CENTERPOINTWARNINGMAX) {
         Serial.print(F(" Attention! Axis in idle?"));
       }
-      Serial.println("");
+      Serial.println();
     }
     end = millis();
     Serial.println(F("Using mean as zero position..."));

@@ -1,6 +1,7 @@
 // The user specific settings, like pin mappings or special configuration variables and sensitivities are stored in config.h.
 // Please open config_sample.h, adjust your settings and save it as config.h
 #include "config.h"
+
 #ifdef LEDRING
 #include <FastLED.h>
 
