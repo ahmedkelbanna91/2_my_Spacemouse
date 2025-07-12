@@ -14,6 +14,7 @@
 #define HES1 1
 #define HES2 2
 #define HES3 3
+
 #define HES6 4
 #define HES7 5
 #define HES8 6
@@ -36,7 +37,7 @@ int invertList[8] = INVERTLIST;
 SimpleKalmanFilter *kalmanFilters[8];
 
 void setupkalmanFilters() {
-  float KalmanFilterValues[3] = { 3.0, 2.0, 0.001 };
+  float KalmanFilterValues[3] = { 5.0, 2.0, 0.01 };
   for (int i = 0; i < 8; i++) {
     // Parameters: Kalman gain for position, Kalman gain for velocity, measurement error
     kalmanFilters[i] = new SimpleKalmanFilter(
@@ -47,13 +48,12 @@ void setupkalmanFilters() {
   }
 }
 
+
 /// @brief Function to read and store analogue voltages for each joystick axis.
 /// @param rawReads pointer to 8 analog values
 void readAllFromSensors(int *rawReads) {
   for (int i = 0; i < 8; i++) {
-    int rawValue = analogRead(pinList[i]);
-    int filteredValue = kalmanFilters[i]->updateEstimate(rawValue);
-    if (fabs(filteredValue) < ANALOG_DEADZONE) filteredValue = 0;
+    int filteredValue = kalmanFilters[i]->updateEstimate(analogRead(pinList[i]));
 
     if (invertList[i] == 1) {
       rawReads[i] = analogMax_Resolution - filteredValue;  // invert the reading

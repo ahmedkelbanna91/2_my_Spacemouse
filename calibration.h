@@ -6,14 +6,14 @@
 /// @param arr array to print
 /// @param size size of the array
 void printArray(int arr[], int size) {
-  Serial.print("{");
+  SERIAL.print("{");
   for (int i = 0; i < size; i++) {
-    Serial.print(arr[i]);
+    SERIAL.print(arr[i]);
     if (i < size - 1) {
-      Serial.print(", ");
+      SERIAL.print(", ");
     }
   }
-  Serial.println("}");
+  SERIAL.println("}");
 }
 
 
@@ -36,15 +36,15 @@ void debugOutput1(int* rawReads, int* keyVals) {
   if (isDebugOutputDue()) {
     // Report back raw ADC 10-bit values if enabled
     for (int i = 0; i < 8; i++) {
-      Serial.printf("%2.2s: %4d  ", axisNames[i], rawReads[i]);
+      SERIAL.printf("%2.2s: %4d  ", axisNames[i], rawReads[i]);
     }
 #if NUMKEYS > 0
-    Serial.print("\t");
+    SERIAL.print("\t");
 #endif
     for (int i = 0; i < NUMKEYS; i++) {
-      Serial.printf("K%d: %d  ", i, keyVals[i]);
+      SERIAL.printf("K%d: %d  ", i, keyVals[i]);
     }
-    Serial.print(DEBUG_LINE_END);
+    SERIAL.print(DEBUG_LINE_END);
   }
 }
 
@@ -52,15 +52,15 @@ void debugOutput2(int* centered, int* keyVals) {
   if (isDebugOutputDue()) {
     // this routine creates the output for the former debug = 2 and debug = 3
     for (int i = 0; i < 8; i++) {
-      Serial.printf("%2.2s: %4d  ", axisNames[i], centered[i]);
+      SERIAL.printf("%2.2s: %4d  ", axisNames[i], centered[i]);
     }
 #if NUMKEYS > 0
-    Serial.print("\t");
+    SERIAL.print("\t");
 #endif
     for (int i = 0; i < NUMKEYS; i++) {
-      Serial.printf("K%d: %d  ", i, keyVals[i]);
+      SERIAL.printf("K%d: %d  ", i, keyVals[i]);
     }
-    Serial.print(DEBUG_LINE_END);
+    SERIAL.print(DEBUG_LINE_END);
   }
 }
 
@@ -71,15 +71,15 @@ void debugOutput4(int16_t* velocity, uint8_t* keyOut) {
   //
   if (isDebugOutputDue()) {
     for (int i = 0; i < 6; i++) {
-      Serial.printf("%2.2s: %4d  ", velNames[i], velocity[i]);
+      SERIAL.printf("%2.2s: %4d  ", velNames[i], velocity[i]);
     }
 #if NUMKEYS > 0
-    Serial.print("\t");
+    SERIAL.print("\t");
 #endif
     for (int i = 0; i < NUMKEYS; i++) {
-      Serial.printf("K%d: %d  ", i, keyOut[i]);
+      SERIAL.printf("K%d: %d  ", i, keyOut[i]);
     }
-    Serial.print(DEBUG_LINE_END);
+    SERIAL.print(DEBUG_LINE_END);
   }
 }
 
@@ -89,15 +89,15 @@ void debugOutput4(int16_t* velocity, uint8_t* keyOut) {
 void debugOutput5(int* centered, int16_t* velocity) {
   if (isDebugOutputDue()) {
     for (int i = 0; i < 8; i++) {
-      Serial.printf("%2.2s: %4d  ", axisNames[i], centered[i]);
+      SERIAL.printf("%2.2s: %4d  ", axisNames[i], centered[i]);
     }
 #if NUMKEYS > 0
-    Serial.print("\t");
+    SERIAL.print("\t");
 #endif
     for (int i = 0; i < 6; i++) {
-      Serial.printf("%2.2s: %4d  ", velNames[i], velocity[i]);
+      SERIAL.printf("%2.2s: %4d  ", velNames[i], velocity[i]);
     }
-    Serial.print(DEBUG_LINE_END);
+    SERIAL.print(DEBUG_LINE_END);
   }
 }
 
@@ -112,7 +112,7 @@ unsigned long startTime;  // Start time for the measurement
 /// @param centered pointer to the array with the centered joystick values
 void calcMinMax(int* centered) {
   if (minMaxCalcState == 0) {
-    delay(2000);
+    delay(3000);
     // Initialize the arrays
     for (int i = 0; i < 8; i++) {
       minValue[i] = 1023;  // Set the min value to the maximum possible value
@@ -120,7 +120,7 @@ void calcMinMax(int* centered) {
     }
     startTime = millis();  // Record the current time
     minMaxCalcState = 1;   // next State: measure!
-    Serial.println(F("Please start moving the spacemouse around for 15 sec!"));
+    SERIAL.println(F("Please start moving the spacemouse around for 15 sec!"));
   } else if (minMaxCalcState == 1) {
     if (millis() - startTime < 15000) {
       for (int i = 0; i < 8; i++) {
@@ -134,13 +134,13 @@ void calcMinMax(int* centered) {
       }
     } else {
       // 15s are over. go to next state and report via console
-      Serial.println(F("\n\nStop moving the spacemouse. These are the result. Copy them in config.h"));
+      SERIAL.println(F("\n\nStop moving the spacemouse. These are the result. Copy them in config.h"));
       minMaxCalcState = 2;
     }
   } else if (minMaxCalcState == 2) {
-    Serial.print(F("#define MINVALS "));
+    SERIAL.print(F("#define MINVALS "));
     printArray(minValue, 8);
-    Serial.print(F("#define MAXVALS "));
+    SERIAL.print(F("#define MAXVALS "));
     printArray(maxValue, 8);
 
     // Calculate and print the ranges for each HALL sensor
@@ -152,37 +152,20 @@ void calcMinMax(int* centered) {
       max = (abs(maxValue[i]) > max) ? abs(maxValue[i]) : max;
       min = (abs(minValue[i]) > min) ? abs(minValue[i]) : min;
     }
-    Serial.print(F("Ranges are: "));
+    SERIAL.print(F("Ranges are: "));
     printArray(minmaxRanges, 8);
     int centerPoint = (max + (min * -1)) / 2;
-    Serial.printf("Centerpoint: %d\n", centerPoint);
+    SERIAL.printf("Centerpoint: %d\n", centerPoint);
 
     for (int i = 0; i < 8; i++) {
       if (abs(minValue[i]) < MINMAX_MINWARNING) {
-        Serial.printf("Warning: minValue[%d] %2.2s is small: %d\n", i, axisNames[i], minValue[i]);
+        SERIAL.printf("Warning: minValue[%d] %2.2s is small: %d\n", i, axisNames[i], minValue[i]);
       }
       if (abs(maxValue[i]) < MINMAX_MAXWARNING) {
-        Serial.printf("Warning: maxValue[%d] %2.2s is small: %d\n", i, axisNames[i], maxValue[i]);
+        SERIAL.printf("Warning: maxValue[%d] %2.2s is small: %d\n", i, axisNames[i], maxValue[i]);
       }
     }
     minMaxCalcState = 3;  // no further reporting
-  }
-}
-
-
-uint16_t iterationsPerSecond = 0;       // count the iterations within one second
-unsigned long lastFrequencyUpdate = 0;  // time from millis(), when the last frequency was calculated
-
-/// @brief update and report the function to learn at what frequency the loop is running
-void updateFrequencyReport() {
-  // increase iterations counter
-  iterationsPerSecond++;
-  if (millis() - lastFrequencyUpdate > 1000) {  // if one second has past: report frequency
-    Serial.print("Frequency: ");
-    Serial.print(iterationsPerSecond);
-    Serial.println(" Hz");
-    lastFrequencyUpdate = millis();  // reset timer
-    iterationsPerSecond = 0;         // reset iteration counter
   }
 }
 
@@ -194,7 +177,7 @@ void updateFrequencyReport() {
 bool busyZeroing(int* centerPoints, uint16_t numIterations, boolean debugFlag) {
   bool noWarningsOccured = true;
   if (debugFlag == true)
-    Serial.println(F("Zeroing HALL Sensors..."));
+    SERIAL.println(F("\nZeroing HALL Sensors..."));
 
   int act[8];                                     // actual value
   uint32_t mean[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };  // Array to count all values during the averaging
@@ -210,7 +193,7 @@ bool busyZeroing(int* centerPoints, uint16_t numIterations, boolean debugFlag) {
   start = millis();
 
   uint16_t count;
-
+  readAllFromSensors(act);
   for (count = 0; count < numIterations; count++) {
     readAllFromSensors(act);
     for (uint8_t i = 0; i < 8; i++) {
@@ -244,27 +227,43 @@ bool busyZeroing(int* centerPoints, uint16_t numIterations, boolean debugFlag) {
 
   // report everything, if with debugFlag
   if (debugFlag) {
-    Serial.println(F("##  Min- Mean - Max -> Dead Zone"));
+    SERIAL.println(F("##  Min - Mean - Max -> Dead Zone"));
     for (int i = 0; i < 8; i++) {
-      Serial.printf("%2.2s: %d - %d - %d - %d  ", axisNames[i], minValue[i], centerPoints[i], maxValue[i], deadZone[i]);
+      SERIAL.printf("%2.2s: %d - %d - %d - %d  ", axisNames[i], minValue[i], centerPoints[i], maxValue[i], deadZone[i]);
       if (deadZone[i] > DEADZONEWARNING) {
-        Serial.print(F(" Attention! Moved axis?"));
+        SERIAL.print(F(" Attention! Moved axis?"));
       }
       if (centerPoints[i] < CENTERPOINTWARNINGMIN || centerPoints[i] > CENTERPOINTWARNINGMAX) {
-        Serial.print(F(" Attention! Axis in idle?"));
+        SERIAL.print(F(" Attention! Axis in idle?"));
       }
-      Serial.println();
+      SERIAL.println();
     }
     end = millis();
-    Serial.println(F("Using mean as zero position..."));
-    Serial.print(F("Suggestion for config.h: "));
-    Serial.print(F("#define DEADZONE "));
-    Serial.println(maxDeadZone);
-    Serial.print(F("This took "));
-    Serial.print(end - start);
-    Serial.print(F(" ms for "));
-    Serial.print(count);
-    Serial.println(F(" iterations."));
+    SERIAL.println(F("Using mean as zero position..."));
+    SERIAL.print(F("Suggestion for config.h: "));
+    SERIAL.print(F("#define DEADZONE "));
+    SERIAL.println(maxDeadZone);
+    SERIAL.print(F("This took "));
+    SERIAL.print(end - start);
+    SERIAL.print(F(" ms for "));
+    SERIAL.print(count);
+    SERIAL.println(F(" iterations.\n"));
   }
   return noWarningsOccured;
+}
+
+uint16_t iterationsPerSecond = 0;       // count the iterations within one second
+unsigned long lastFrequencyUpdate = 0;  // time from millis(), when the last frequency was calculated
+
+/// @brief update and report the function to learn at what frequency the loop is running
+void updateFrequencyReport() {
+  // increase iterations counter
+  iterationsPerSecond++;
+  if (millis() - lastFrequencyUpdate > 1000) {  // if one second has past: report frequency
+    SERIAL.print("Frequency: ");
+    SERIAL.print(iterationsPerSecond);
+    SERIAL.println(" Hz");
+    lastFrequencyUpdate = millis();  // reset timer
+    iterationsPerSecond = 0;         // reset iteration counter
+  }
 }

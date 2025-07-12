@@ -2,159 +2,104 @@
 // Please open config_sample.h, adjust your settings and save it as config.h
 #include "config.h"
 
-#ifdef LEDRING
+#ifdef LEDpin
 #include <FastLED.h>
 
-CRGB leds[LEDRING];
+CRGB LED[LEDSnum];
+#define MaxLEDbrightness 200
 
+void showled(uint8_t r, uint8_t g, uint8_t b) {
+  static uint8_t lastR = 255, lastG = 255, lastB = 255;
+  if (r == lastR && g == lastG && b == lastB) return;
+
+  for (int i = 0; i < LEDSnum; i++) {
+    LED[i] = CRGB(r, g, b);
+  }
+  FastLED.show();
+
+  lastR = r;
+  lastG = g;
+  lastB = b;
+}
+
+void fadeWithDelay(int start, int end, int step, int frameDelay = 4) {
+  if (step == 0) return;
+  for (int i = start; (step > 0) ? i <= end : i >= end; i += step) {
+    showled(i, i, i);
+    delay(frameDelay);
+  }
+}
 
 /// @brief Initialize the LED ring. Call this once during setup()
 void initLEDring() {
-  FastLED.addLeds<WS2811, LEDpin, GRB>(leds, LEDRING);
+  FastLED.addLeds<WS2811, LEDpin, GRB>(LED, LEDSnum);
+  FastLED.setBrightness(MaxLEDbrightness);
+  fadeWithDelay(0, MaxLEDbrightness, +1);   // fade in
+  fadeWithDelay(MaxLEDbrightness, 50, -1);  // fade out to 50
+  fadeWithDelay(0, MaxLEDbrightness, +1);   // fade in
 }
 
-/// @brief process the LEDs connected via FastLED. Call this in loop()
-/// @param velocity array with velocity informations
-/// @param ledCmd transmit if the LED shall be on (as it may be demanded over USB)
-void processLED(int16_t *velocity, boolean ledCmd) {
+
+
+void updateLEDsBasedOnMotion(int16_t *velocity, bool State) {
   unsigned long now = millis();
   static unsigned long lastLEDupdate = now;
 
-
   if (now - lastLEDupdate >= LEDUPDATERATE_MS) {
-    setAllLEDs(CRGB::Black);
-    if (ledCmd) {
-      // turn all on
-      setAllLEDs(CRGB::DarkOliveGreen);
-    } else {
-      // USB doesn't send us commands to turn on LED
-      switch (getMainVelocity(velocity)) {
-        case TRANSX:
-          setAllLEDs(CRGB::Yellow);
-          // TX pos: 3 o'clock neg: 9 o'clock
-          // light up the _free_ positions
-          if ((velocity[TRANSX] > 0) != (INVX == 1)) {
-            set4LEDsOnClock(9, CRGB::Red);
-          } else {
-            set4LEDsOnClock(3, CRGB::Red);
-          }
-          break;
-        case TRANSY:
-          setAllLEDs(CRGB::Yellow);
-          // TY pos: 12 o'clock neg, 6 o'clock
-          if ((velocity[TRANSY] > 0) != (INVY == 1)) {
-            set4LEDsOnClock(6, CRGB::Red);
-          } else {
-            set4LEDsOnClock(12, CRGB::Red);
-          }
-          break;
-        case TRANSZ:
-          // TZ pos: all white, neg: all dark blue
-          if ((velocity[TRANSZ] > 0) != (INVZ == 1)) {
-            setAllLEDs(CRGB::AntiqueWhite);
-            FastLED.setBrightness(50);
-          } else {
-            setAllLEDs(CRGB::DarkBlue);
-            FastLED.setBrightness(50);
-          }
-          break;
-        case ROTX:
-          setAllLEDs(CRGB::SkyBlue);
-          // RX pos: red 6 o'clock, neg red 12 o'clock
-          if ((velocity[ROTX] > 0) != (INVRX == 1)) {
-            set4LEDsOnClock(12, CRGB::Green);
-          } else {
-            set4LEDsOnClock(6, CRGB::Green);
-          }
-          break;
-        case ROTY:
-          setAllLEDs(CRGB::SkyBlue);
-          // RY pos: red 3 o'clock, neg red 9 o'clock
-          if ((velocity[ROTY] > 0) != (INVRY == 1)) {
-            set4LEDsOnClock(9, CRGB::Green);
-          } else {
-            set4LEDsOnClock(3, CRGB::Green);
-          }
-          break;
-        case ROTZ:
-          setAllLEDs(CRGB::SkyBlue);
-          // RZ pos: red ring wandering around counterclock wise; neg: clockwise
-          if ((velocity[ROTZ] > 0) != (INVRZ == 1)) {
-            rotateColor(false, CRGB::DarkRed);
-          } else {
-            rotateColor(true, CRGB::DarkRed);
-          }
-          break;
-        default:  // all very dimm
-          setAllLEDs(CRGB::DarkGrey);
-          FastLED.setBrightness(5);
-          break;
-      }
+    lastLEDupdate = now;
+    if (!State) {
+      showled(0, 0, 0);
+      return;
+    }
+
+    int trX = (velocity[TRANSX]) + (-velocity[ROTY]);
+    int trY = (velocity[TRANSY]) + (velocity[ROTX]);
+    int trZ = (velocity[TRANSZ]) + (-velocity[ROTZ]);
+
+
+    // “no motion” → white
+    if (abs(trX) < 10 && abs(trY) < 10 && abs(trZ) < 10) {
+      showled(MaxLEDbrightness, MaxLEDbrightness, MaxLEDbrightness);
+      return;
+    }
+
+    // Map movement magnitude → intensity
+    int mappedX = map(constrain(abs(trX), 0, 200), 0, 200, 0, MaxLEDbrightness);
+    int mappedY = map(constrain(abs(trY), 0, 200), 0, 200, 0, MaxLEDbrightness);
+    int mappedZ = map(constrain(abs(trZ), 0, 200), 0, 200, 0, MaxLEDbrightness);
+
+    // Z translation → All LEDs fade together
+    if (abs(trZ) >= abs(trX) && abs(trZ) >= abs(trY)) {
+      showled(MaxLEDbrightness, MaxLEDbrightness - mappedZ, MaxLEDbrightness - mappedZ);
+      return;
+    }
+
+    CRGB colors[LEDSnum];
+    for (int i = 0; i < LEDSnum; i++) colors[i] = CRGB(MaxLEDbrightness, MaxLEDbrightness, MaxLEDbrightness);
+
+    CRGB trXmoveColor = CRGB(MaxLEDbrightness, MaxLEDbrightness - mappedX, MaxLEDbrightness - mappedX);
+    CRGB trYmoveColor = CRGB(MaxLEDbrightness, MaxLEDbrightness - mappedY, MaxLEDbrightness - mappedY);
+
+    // X translation
+    if (trX < -10) {
+      colors[1] = trXmoveColor;
+    } else if (trX > 10) {
+      colors[3] = trXmoveColor;
+    }
+
+    // Y translation
+    if (trY < -10) {
+      colors[0] = trYmoveColor;
+    } else if (trY > 10) {
+      colors[2] = trYmoveColor;
+    }
+
+    // write out
+    for (int i = 0; i < LEDSnum; i++) {
+      LED[i] = colors[i];
     }
     FastLED.show();
-    lastLEDupdate += LEDUPDATERATE_MS;
   }
-}
-
-/// @brief rotate a single around the LED ring
-/// @param clockwise turns clockwise if true
-/// @param color which CRGB color
-void rotateColor(boolean clockwise, CRGB color) {
-  static int rotateLEDpos = 0;
-  leds[rotateLEDpos] = color;
-  if (clockwise) {
-    rotateLEDpos = (rotateLEDpos + 1) % LEDRING;
-  } else {
-    rotateLEDpos = (rotateLEDpos + LEDRING - 1) % LEDRING;  // avoid negativ led position
-  }
-}
-
-/// @brief set all leds to given color
-/// @param color
-void setAllLEDs(CRGB color) {
-  for (int i = 0; i < LEDRING; i++) {
-    leds[i] = color;
-  }
-}
-
-/// @brief set LED on LED ring regarding the ring as a clock
-/// @param clock position of the LED to light up
-/// @param color color to light
-void setLEDsOnClock(uint16_t clock, CRGB color) {
-  uint16_t pos = 0;
-  pos = (clock * (LEDRING / 12)) % LEDRING;
-  pos = (LEDclockOffset + pos) % LEDRING;
-  leds[pos] = color;
-}
-
-/// @brief set 4 LEDs on LED ring regarding the ring as a clock
-/// @param clock position of the LED to light up
-/// @param color color to light
-void set4LEDsOnClock(uint16_t clock, CRGB color) {
-  uint16_t pos = 0;
-  pos = (clock * (LEDRING / 12)) % LEDRING;
-  pos = (LEDclockOffset + pos) % LEDRING;
-
-  leds[pos] = color;
-  leds[(pos + 1) % LEDRING] = color;
-  leds[(LEDRING + pos - 1) % LEDRING] = color;
-  leds[(LEDRING + pos - 2) % LEDRING] = color;
 }
 
 #endif  // #if LEDring
-
-/// @brief Calculate which velocity is the main action. What is the strongest movement?
-/// @param velocity array with velocities
-/// @return index with the biggest velocity. returns -1 if all in deadzone
-int8_t getMainVelocity(int16_t *velocity) {
-  int8_t mainVelocity = -1;
-  int16_t velMax = 0;
-  for (int i = 0; i < 6; i++) {
-    // bigger than deadzone and bigger than before?
-    if ((abs(velocity[i]) > velMax) && (abs(velocity[i]) > VelocityDeadzoneForLED)) {
-      velMax = abs(velocity[i]);
-      mainVelocity = i;
-    }
-  }
-  return mainVelocity;
-}

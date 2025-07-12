@@ -26,23 +26,18 @@ void readAllFromKeys(int* keyVals) {
 
 // Evaluate and debounce all keys from the raw keyVals into the debounced keyOut event or the debounced keyState.
 // The keyOut is only 1 for one iteration of the loop.
-void evalKeys(int* keyVals, uint8_t* keyOut, uint8_t* keyState) {
-  //Button Evaluation
+void evalKeys(int* keyVals, uint8_t* keyOut, uint8_t* keyState, int& debug) {
   for (int i = 0; i < NUMKEYS; i++) {
     // The keys are configured with pull_up, see setupKeys() and are pulled to ground, when pressed.
     // Therefore, the pressed key is false, which is an inverted logic
     if (!keyVals[i]) {  // the key is pressed
       // Making sure button cannot trigger multiple times which would result in overloading HID.
-      if (keyState[i] == 0) {     // if the button has not been pressed lately:
-        keyOut[i] = 1;            // this is the variable telling the outside world only one iteration, that the key was pressed
-        keyState[i] = 1;          // remember, that we already told the outside world about this key
-        timestamp[i] = millis();  // remember the time, the button was pressed
-        // Serial.println("");
-        // Serial.print("Key: ");  // this is always sent over the serial console, and not only in debug
-        // Serial.print(i);
-        // Serial.println("");
-
-      } else {  // the button was already pressed and is still pressed (and the event sent in the last loop), don't send the keyOut event again.
+      if (keyState[i] == 0) {                            // if the button has not been pressed lately:
+        keyOut[i] = 1;                                   // this is the variable telling the outside world only one iteration, that the key was pressed
+        keyState[i] = 1;                                 // remember, that we already told the outside world about this key
+        timestamp[i] = millis();                         // remember the time, the button was pressed
+        if (debug == 24) SERIAL.printf("Key: %d\n", i);  // this is always sent over the serial console, and not only in debug
+      } else {                                           // the button was already pressed and is still pressed (and the event sent in the last loop), don't send the keyOut event again.
         keyOut[i] = 0;
       }
     } else {                   // the button is not pressed
@@ -55,4 +50,17 @@ void evalKeys(int* keyVals, uint8_t* keyOut, uint8_t* keyState) {
     }
   }
 }
+
+bool CheckKey3(int key, int& debug) {
+  static bool SendData = false;
+  static bool prevKey3 = false;
+  if (key && !prevKey3) {
+    SendData = !SendData;
+    if (debug == 23) SERIAL.printf("SendData = %d\n", SendData);
+  }
+  prevKey3 = key;
+
+  return SendData;
+}
+
 #endif

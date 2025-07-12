@@ -1,12 +1,11 @@
-
-#include "Arduino.h"
+// #include "Arduino.h"
 #include "config.h"
-
+#include "screen.h"
 #include "usbSpaceHID.h"
 #include "kinematics.h"
 #include "calibration.h"
 #include "spaceKeys.h"
-#include "screen.h"
+
 
 
 #ifdef LEDpin
@@ -39,63 +38,42 @@ uint8_t keyState[NUMKEYS];
 // int16_t to match what the HID protocol expects.
 int16_t velocity[6];
 
-int tmpInput;  // store the value, the user might input over the serial
+
 
 void setup() {
+  setupUSB();
+
+  analogReadResolution(analogRead_Resolution);
+
   setupDisplay();
+
   setupkalmanFilters();
-  setAnalogResolution();
+  busyZeroing(centerPoints, 500, true);
+#ifdef LEDpin
+  initLEDring();
+#endif
+  busyZeroing(centerPoints, 3000, true);
 
   if (!HID.ready()) {
     delay(1);
     return;
   }
 
-  USB.VID(0x256f);
-  USB.PID(0xc635);
-  USB.productName("SpaceMouse Compact");
-  USB.manufacturerName("BANNA");
-
-  UsbDevice.begin();
-  USB.begin();
-  delay(100);
-
-  // Begin Seral for debugging
-  Serial.begin(115200);
-  delay(100);
-  Serial.setTimeout(2);  // the serial interface will look for new debug values and it will only wait 2ms
-
-
 // setup the keys e.g. to internal pull-ups
 #if NUMKEYS > 0
   setupKeys();
 #endif
-#ifdef LEDpin
-  initLEDring();
-#endif
 }
 
 void loop() {
-  if (doOnce) {
-    doOnce = false;
-    // Read idle/centre positions for joysticks.
-    setAnalogResolution();
-
-    // zero the joystick position 500 times (takes approx. 480 ms)
-    // during setup() we are not interested in the debug output: debugFlag = false
-    busyZeroing(centerPoints, 3000, true);
-  }
-
   // check if the user entered a debug mode via serial interface
-  if (Serial.available()) {
-    tmpInput = Serial.parseInt();  // Read from serial interface, if a new debug value has been sent. Serial timeout has been set in setup()
+  if (SERIAL.available()) {
+    int tmpInput = SERIAL.parseInt();  // Read from serial interface, if a new debug value has been sent. Serial timeout has been set in setup()
     if (tmpInput != 0) {
       debug = tmpInput;
       if (tmpInput == -1) {
-        Serial.println(F("Please enter the debug mode now or while the script is reporting."));
+        SERIAL.println(F("Please enter the debug mode now or while the script is reporting."));
       }
-      // Debug is updated check if the ADC referencevoltage has to be changed.
-      setAnalogResolution();
     }
   }
 
@@ -107,15 +85,14 @@ void loop() {
   readAllFromKeys(keyVals);
 #endif
   // Report back 0-1023 raw ADC 10-bit values if enabled
-  if (debug == 1) {
-    debugOutput1(rawReads, keyVals);
-  }
+  if (debug == 1) debugOutput1(rawReads, keyVals);
 
-  if (debug == 11) {
+  if (debug == 11 || doOnce) {
     // calibrate the joystick
     // As this is called in the debug=11, we do more iterations.
     busyZeroing(centerPoints, 3000, true);
     debug = -1;  // this only done once
+    doOnce = false;
   }
 
   // Subtract centre position from measured position to determine movement.
@@ -123,38 +100,27 @@ void loop() {
     centered[i] = rawReads[i] - centerPoints[i];
   }
 
-  if (debug == 20) {
-    calcMinMax(centered);  // debug=20 to calibrate MinMax values
-  }
+  if (debug == 12) calcMinMax(centered);  // debug=12 to calibrate MinMax values
 
   // Report centered joystick values if enabled. Values should be approx -500 to +500, jitter around 0 at idle
-  if (debug == 2) {
-    debugOutput2(centered, keyVals);
-  }
+  if (debug == 2) debugOutput2(centered, keyVals);
 
   FilterAnalogReadOuts(centered);
 
   // Report centered joystick values. Filtered for deadzone. Approx -350 to +350, locked to zero at idle
-  if (debug == 3) {
-    debugOutput2(centered, keyVals);
-  }
+  if (debug == 3) debugOutput2(centered, keyVals);
 
   calculateKinematic(centered, velocity);
 
-
 #if NUMKEYS > 0
-  evalKeys(keyVals, keyOut, keyState);
+  evalKeys(keyVals, keyOut, keyState, debug);
 #endif
 
   // Report translation and rotation values if enabled.
-  if (debug == 4) {
-    debugOutput4(velocity, keyOut);
-  }
-  if (debug == 5) {
-    debugOutput5(centered, velocity);
-  }
+  if (debug == 4) debugOutput4(velocity, keyOut);
+  if (debug == 5) debugOutput5(centered, velocity);
 
-  // if the kill-key feature is enabled, rotations or translations are killed=set to zero
+    // if the kill-key feature is enabled, rotations or translations are killed=set to zero
 #if (NUMKILLKEYS == 2)
   // check for the raw keyVal and not keyOut, because keyOut is only 1 for a single iteration. keyVals has inverse Logic due to pull-ups
   // kill rotation
@@ -172,9 +138,7 @@ void loop() {
 #endif
 
   // report velocity and keys after possible kill-key feature
-  if (debug == 6) {
-    debugOutput4(velocity, keyOut);
-  }
+  if (debug == 6) debugOutput4(velocity, keyOut);
 
 #if SWITCHYZ > 0
   switchYZ(velocity);
@@ -188,40 +152,24 @@ void loop() {
 #endif
 
   // report velocity and keys after Switch or ExclusiveMode
-  if (debug == 61) {
-    debugOutput4(velocity, keyOut);
-  }
+  if (debug == 61) debugOutput4(velocity, keyOut);
 
-  // get the values to the USB HID driver to send if necessary
-  send_command(velocity[ROTX], velocity[ROTY], velocity[ROTZ], velocity[TRANSX], velocity[TRANSY], velocity[TRANSZ], keyState, debug);
+  displayScreen(-velocity[ROTX], -velocity[ROTY], velocity[ROTZ],
+                velocity[TRANSX], -velocity[TRANSY], -velocity[TRANSZ],
+                keyState);
 
   // update and report the at what frequency the loop is running
-  if (debug == 7) {
-    updateFrequencyReport();
-  }
+  if (debug == 7) updateFrequencyReport();
+
+
+  // get the values to the USB HID driver to send if necessary
+  if (CheckKey3(keyState[2], debug)) sendUSBData(velocity[ROTX], velocity[ROTY], velocity[ROTZ],
+                                                 velocity[TRANSX], velocity[TRANSY], velocity[TRANSZ],
+                                                 keyState, debug);
+
+  SpaceMouseHID.sendBattery(42, false);
 
 #ifdef LEDpin
-  processLED(velocity, UsbDevice.getLedState());
+  updateLEDsBasedOnMotion(velocity, SpaceMouseHID.getLed());
 #endif
-
-  displayScreen(velocity[ROTX], velocity[ROTY], velocity[ROTZ], velocity[TRANSX], velocity[TRANSY], velocity[TRANSZ], keyState);
-
 }  // end loop()
-
-
-
-/**
- * @brief Set the analog reference to 5V for debug 1 and to 2.56V otherwise
- */
-void setAnalogResolution() {
-  analogReadResolution(analogRead_Resolution);
-  Serial.println(F("Setting analogReadResolution to 12"));
-
-  // The first measurements after changing the reference voltage can be wrong. So take 100ms to let the voltage stabilize and
-  // take some measurements afterwards just to be sure. Performancewise this shouldn't be a problem due to the debug/setup
-  // nature of this function.
-  delay(100);
-  for (int i = 0; i <= 8; i++) {
-    readAllFromSensors(rawReads);
-  }
-}

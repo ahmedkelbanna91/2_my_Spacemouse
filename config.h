@@ -17,12 +17,14 @@ Debug Modes:
 
 1:  Output raw joystick values. 0-analogMax_Resolution raw ADC 10-bit values
 11: Calibrate / Zero the Spacemouse and get a dead-zone suggestion (This is also done on every startup in the setup())
-
+12: semi-automatic min-max calibration. (Replug/reset the mouse, to enable the semi-automatic calibration for a second time.)
+20: print send usb Payload (trans and rot)
+21: print send usb Payload (trans)
+22: print send usb Payload (rot)
+23: print 3rd button send data state
+24: print which button is pressed
 2:  Output centered joystick values. Values should be approximately -500 to +500, jitter around 0 at idle.
-20: semi-automatic min-max calibration. (Replug/reset the mouse, to enable the semi-automatic calibration for a second time.)
-
 3:  Output centered joystick values. Filtered for deadzone. Approximately -350 to +350, locked to zero at idle, modified with a function.
-
 4:  Output translation and rotation values. Approximately -350 to +350 depending on the parameter.
 5:  Output debug 4 and 5 side by side for direct cause and effect reference.
 6:  Report velocity and keys after possible kill-key feature
@@ -34,7 +36,7 @@ Debug Modes:
 #define STARTDEBUG 0  // Can also be set over the serial interface, while the program is running!
 
 // Send a HID report every 8 ms
-#define HIDUPDATERATE_MS 8
+#define HIDUPDATERATE_MS 10
 
 
 /* First Calibration: Hall effect sensors pin assignment
@@ -118,8 +120,7 @@ Semi-automatic: Set debug = 11. Don't touch the mouse and observe the automatic 
 Manual:         Set debug = 2.  Don't touch the mouse but observe the values. They should be nearly to zero.
                                 Every value around zero which is noise or should be neglected afterwards is in the following deadzone.
 */
-#define ANALOG_DEADZONE 10
-#define DEADZONE 10  //15  // Recommended to have this as small as possible to allow full range of motion.
+#define DEADZONE 50  //15  // Recommended to have this as small as possible to allow full range of motion.
 
 // a dead zone above the following value will be warned
 #define DEADZONEWARNING 50
@@ -182,8 +183,10 @@ Insert measured Values like this: {HES0, HES1, HES2, HES3, HES6, HES7, HES8, HES
 // #define MINVALS  { -500, -527, -447, -462, -583, -436, -490, -531 }
 // #define MAXVALS  { 546, 485, 528, 565, 481, 549, 488, 582 }
 
-#define MINVALS  { -500, -500, -500, -500, -500, -500, -500, -500 }
-#define MAXVALS  { 500, 500, 500, 500, 500, 500, 500, 500 }
+#define MINVALS \
+  { -500, -500, -500, -500, -500, -500, -500, -500 }
+#define MAXVALS \
+  { 500, 500, 500, 500, 500, 500, 500, 500 }
 
 // Ranges are: {1046, 1012, 975, 1027, 1064, 985, 978, 1113}
 
@@ -237,7 +240,7 @@ This should be at level 0 when starting the calibration!
 
 Recommendation after tuning: MODFUNC 3
 */
-#define MODFUNC 3  // Used as default value as long as the data hasn't been saved in the EEPROM
+#define MODFUNC 2  // Used as default value as long as the data hasn't been saved in the EEPROM
 
 /* Sixth Calibration: Direction
 ===============================
@@ -313,8 +316,6 @@ How many keys reported? Classical + ROTARY_KEYS in total.
 // uint8_t button_bits[] = { 12, 13, 14, 15, 22, 25, 23, 24, 0, 1, 2, 4, 5, 8, 26 };
 
 
-
-
 // BUTTONLIST must have at least as many elements as NUMHIDKEYS
 // The keys from KEYLIST or ROTARY_KEYS are assigned to buttons here:
 #define BUTTONLIST \
@@ -388,17 +389,11 @@ How many kill keys are there? (disabled: 0; enabled: 2)
 /* LED support
 ===============
 */
-// #define LEDpin 5
-// #define LEDRING 4
-
-// The LEDs light up, if a certain movement is reached:
-#define VelocityDeadzoneForLED 15
-
-// About how many LEDs must the ring by turned to align?
-#define LEDclockOffset 0
+#define LEDpin 5
+#define LEDSnum 4
 
 // how often shall the LEDs be updated
-#define LEDUPDATERATE_MS 150
+#define LEDUPDATERATE_MS 20
 /* Advanced debug output settings
 =================================
 The following settings allow customization of debug output behavior 
@@ -411,3 +406,30 @@ The following settings allow customization of debug output behavior
 // #define DEBUG_LINE_END "\r"
 // If you need to report some debug outputs to trace errors, you can change the debug output to "\r\n" to get a newline with each debug output. (old behavior)
 #define DEBUG_LINE_END "\r\n"
+
+
+
+
+
+
+
+
+
+
+
+// #define USB_VID 0x256F
+// #define USB_PID 0xc635
+// #define USB_PRODUCT "SpaceMouse Compact"
+
+// SpaceMouse Wireless - USB-cabled
+// #define USB_VID 0x256f
+// #define USB_PID 0xC62E
+// #define USB_PRODUCT "SpaceMouse Wireless USB"
+
+// (This is the hardware ID you'll see in Windows when installing the Bluetooth-Edition driver: HID\Vid_256F&Pid_C63A)
+// SpaceMouse Wireless - Bluetooth Edition
+// #define USB_VID 0x256F
+// #define USB_PID 0xC63A
+// #define USB_PRODUCT "SpaceMouse Wireless BLE"
+// #define USB_MANUFACTURER "BANNA"
+// #define USB_SERIAL "123456"
