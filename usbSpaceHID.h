@@ -1,6 +1,17 @@
+#include <stdint.h>
 // #define MSCUPDATE
 #define USBSERIAL
 
+
+
+// Send a HID report every 8 ms
+#define HIDUPDATERATE_MS 5
+
+#define USBVID 0x256F
+#define USBPID 0xC63A
+#define USBMANUFACTURER "ABANNATECH"
+#define USBPRODUCT "SpaceMouse Wireless BLE"
+#define USBSERIALNO "123456"
 
 
 
@@ -10,19 +21,6 @@
 #warning This sketch should be used when USB is in OTG mode
 void setup() {}
 void loop() {}
-#endif
-
-#define USBVID 0x256F
-#define USBPID 0xC63A
-#define USBMANUFACTURER "ABANNATECH"
-#define USBPRODUCT "SpaceMouse Wireless BLE"
-#define USBSERIALNO "123456"
-
-#if USBVID > USHRT_MAX
-#error USBVID MAX_VALUE = 65535
-#endif
-#if USBPID > USHRT_MAX
-#error USBPID MAX_VALUE = 65535
 #endif
 
 #include "USB.h"
@@ -43,57 +41,80 @@ FirmwareMSC MSC_Update;
 #endif
 
 #include "USBHID.h"
+#include "USBHIDVendor.h"
 USBHID HID;
+USBHIDVendor Vendor;
+
+char mscState[32] = "MSC: Idle";
+char mscProgress[32] = "";
+uint8_t USBSTATE = 0;
 
 static const uint8_t report_descriptor[] = {
-  // --- Global Items ---
   0x05, 0x01,  // Usage Page (Generic Desktop)
   0x09, 0x08,  // Usage (Multi-axis Controller)
   0xA1, 0x01,  // Collection (Application)
 
   // --- Translation Report (ID 1) ---
-  0xA1, 0x00, 0x85, 0x01,
-  0x16, 0xA2, 0xFE, 0x26, 0x5E, 0x01,
-  0x09, 0x30, 0x09, 0x31, 0x09, 0x32,
-  0x75, 0x10, 0x95, 0x03, 0x81, 0x02,
-  0xC0,
+  0x85, 0x01,        // Report ID 1
+  0x09, 0x30,        // X
+  0x09, 0x31,        // Y
+  0x09, 0x32,        // Z
+  0x16, 0x01, 0xF8,  // Logical Min (-2047)
+  0x26, 0xFF, 0x07,  // Logical Max (2047)
+  0x75, 0x10,        // Report Size (16)
+  0x95, 0x03,        // Report Count (3)
+  0x81, 0x02,        // Input (Data,Var,Abs)
 
   // --- Rotation Report (ID 2) ---
-  0xA1, 0x00, 0x85, 0x02,
-  0x16, 0xA2, 0xFE, 0x26, 0x5E, 0x01,
-  0x09, 0x33, 0x09, 0x34, 0x09, 0x35,
-  0x75, 0x10, 0x95, 0x03, 0x81, 0x02,
-  0xC0,
+  0x85, 0x02,  // Report ID 2
+  0x09, 0x33,  // Rx
+  0x09, 0x34,  // Ry
+  0x09, 0x35,  // Rz
+  0x16, 0x01, 0xF8,
+  0x26, 0xFF, 0x07,
+  0x75, 0x10,
+  0x95, 0x03,
+  0x81, 0x02,
 
   // --- Button Report (ID 3) ---
-  0xA1, 0x00, 0x85, 0x03,
-  0x05, 0x09, 0x19, 0x01, 0x29, 0x02,
-  0x15, 0x00, 0x25, 0x01,
-  0x75, 0x01, 0x95, 0x02, 0x81, 0x02,
-  0x75, 0x01, 0x95, 0x0E, 0x81, 0x03,
-  0xC0,
+  0x85, 0x03,  // Report ID 3
+  0x05, 0x09,  // Usage Page (Buttons)
+  0x19, 0x01,  // Usage Min (1)
+  0x29, 0x20,  // Usage Max (32)
+  0x15, 0x00,  // Logical Min (0)
+  0x25, 0x01,  // Logical Max (1)
+  0x75, 0x01,  // Report Size (1)
+  0x95, 0x20,  // Report Count (32)
+  0x81, 0x02,  // Input (Data,Var,Abs)
 
-  // --- LED Control Report (ID 4) ---
-  0xA1, 0x02, 0x85, 0x04,
-  0x05, 0x08, 0x09, 0x4B,
-  0x15, 0x00, 0x25, 0x01,
-  0x95, 0x01, 0x75, 0x01, 0x91, 0x02,
-  0x95, 0x01, 0x75, 0x07, 0x91, 0x03,
-  0xC0,
+  // --- LED Report (ID 4) ---
+  0x85, 0x04,  // Report ID 4
+  0x05, 0x08,  // Usage Page (LEDs)
+  0x09, 0x4B,  // Usage (Generic Indicator)
+  0x15, 0x00,  // Logical Min (0)
+  0x25, 0x01,  // Logical Max (1)
+  0x75, 0x01,
+  0x95, 0x01,
+  0x91, 0x02,  // Output (Data,Var,Abs)
+  0x75, 0x07,
+  0x95, 0x01,
+  0x91, 0x03,  // Output (Const,Var,Abs) - padding
 
   // --- Power Status Report (ID 23) ---
-  0x06, 0x00, 0xFF,
-  0x85, 0x17,
-  0x09, 0x01,
+  0x06, 0x00, 0xFF,  // Usage Page (Vendor-defined)
+  0x85, 0x17,        // Report ID 23
+  0x09, 0x01,        // Vendor Usage 1 (Battery)
   0x15, 0x00, 0x25, 0x64,
   0x75, 0x08, 0x95, 0x01,
-  0x81, 0x02,
-  0x09, 0x02,
-  0x25, 0x01, 0x95, 0x01,
-  0x81, 0x02,
+  0x81, 0x02,  // Input (Data,Var,Abs)
+  0x09, 0x02,  // Vendor Usage 2 (Charging)
+  0x25, 0x01,
+  0x95, 0x01,
+  0x81, 0x02,  // Input (Data,Var,Abs)
 
-  0xC0  // End Application Collection
+  0xC0  // End Collection
 };
+
 
 class SpaceMouseHID_Device : public USBHIDDevice {
 public:
@@ -148,30 +169,62 @@ public:
 SpaceMouseHID_Device SpaceMouseHID;
 
 
-char usbState[32] = "USB: Unknown";
-char mscState[32] = "MSC: Idle";
-char mscProgress[32] = "";
 
 static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
   if (event_base == ARDUINO_USB_EVENTS) {
     arduino_usb_event_data_t* data = (arduino_usb_event_data_t*)event_data;
     switch (event_id) {
       case ARDUINO_USB_STARTED_EVENT:
+        USBSTATE = 1;
         SERIAL.println("USB PLUGGED");
-        snprintf(usbState, sizeof(usbState), "USB: Plugged");
         break;
       case ARDUINO_USB_STOPPED_EVENT:
+        USBSTATE = 2;
         SERIAL.println("USB UNPLUGGED");
-        snprintf(usbState, sizeof(usbState), "USB: Unplugged");
         break;
       case ARDUINO_USB_SUSPEND_EVENT:
+        USBSTATE = 3;
         SERIAL.printf("USB SUSPENDED: remote_wakeup_en: %u\n", data->suspend.remote_wakeup_en);
-        snprintf(usbState, sizeof(usbState), "USB: Suspended");
         break;
       case ARDUINO_USB_RESUME_EVENT:
+        USBSTATE = 4;
         SERIAL.println("USB RESUMED");
-        snprintf(usbState, sizeof(usbState), "USB: Resumed");
         break;
+      default: break;
+    }
+  } else if (event_base == ARDUINO_USB_HID_EVENTS) {
+    arduino_usb_hid_event_data_t* data = (arduino_usb_hid_event_data_t*)event_data;
+    switch (event_id) {
+      case ARDUINO_USB_HID_SET_PROTOCOL_EVENT: SERIAL.printf("HID SET PROTOCOL: %s\n", data->set_protocol.protocol ? "REPORT" : "BOOT"); break;
+      case ARDUINO_USB_HID_SET_IDLE_EVENT: SERIAL.printf("HID SET IDLE: %u\n", data->set_idle.idle_rate); break;
+
+      default: break;
+    }
+  } else if (event_base == ARDUINO_USB_HID_VENDOR_EVENTS) {
+    arduino_usb_hid_vendor_event_data_t* data = (arduino_usb_hid_vendor_event_data_t*)event_data;
+    switch (event_id) {
+      case ARDUINO_USB_HID_VENDOR_GET_FEATURE_EVENT:
+        Serial.printf("HID VENDOR GET FEATURE: len:%u\n", data->len);
+        for (uint16_t i = 0; i < data->len; i++) {
+          Serial.write(data->buffer[i] ? data->buffer[i] : '.');
+        }
+        Serial.println();
+        break;
+      case ARDUINO_USB_HID_VENDOR_SET_FEATURE_EVENT:
+        Serial.printf("HID VENDOR SET FEATURE: len:%u\n", data->len);
+        for (uint16_t i = 0; i < data->len; i++) {
+          Serial.write(data->buffer[i] ? data->buffer[i] : '.');
+        }
+        Serial.println();
+        break;
+      case ARDUINO_USB_HID_VENDOR_OUTPUT_EVENT:
+        Serial.printf("HID VENDOR OUTPUT: len:%u\n", data->len);
+        for (uint16_t i = 0; i < data->len; i++) {
+          Serial.write(Vendor.read());
+        }
+        Serial.println();
+        break;
+
       default: break;
     }
   }
@@ -209,13 +262,6 @@ static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t eve
     }
   }
 #endif
-
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_6x10_tr);
-  u8g2.drawStr(0, 10, usbState);
-  u8g2.drawStr(0, 22, mscState);
-  u8g2.drawStr(0, 32, mscProgress);
-  u8g2.sendBuffer();
 }
 
 
@@ -225,6 +271,11 @@ void setupUSB() {
   USB.productName(USBPRODUCT);
   USB.manufacturerName(USBMANUFACTURER);
   USB.serialNumber(USBSERIALNO);
+  USB.usbClass(0x00);
+  USB.usbSubClass(0x00);
+  USB.usbProtocol(0x00);
+  USB.usbPower(500);
+
 #ifdef USBSERIAL
   USB.onEvent(usbEventCallback);
   USBSerial.begin();
@@ -240,6 +291,7 @@ void setupUSB() {
 #endif
   MSC_Update.begin();
 #endif
+  Vendor.begin();
   SpaceMouseHID.begin();
   USB.begin();
 }

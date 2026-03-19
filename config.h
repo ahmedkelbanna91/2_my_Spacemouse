@@ -31,12 +31,8 @@ Debug Modes:
 61: Report velocity and keys after kill-switch or ExclusiveMode
 7:  Report the frequency of the loop() -> how often is the loop() called in one second?
 8:  Report the bits and bytes send as button codes
-9:  Report details about the encoder wheel, if ROTARY_AXIS > 0 or ROTARY_KEYS>0
 */
 #define STARTDEBUG 0  // Can also be set over the serial interface, while the program is running!
-
-// Send a HID report every 8 ms
-#define HIDUPDATERATE_MS 10
 
 
 /* First Calibration: Hall effect sensors pin assignment
@@ -61,8 +57,8 @@ If you have mounted the magnets upside-down, the values will be inverted.
    on the silk screen.
 2. Compile the script, type 1 into the serial interface and hit enter to enable debug output 1.
 3. With the spacemouse in front of you (ie. USB connection at the backside ie. @ north), move the knob from south to north and observe the debug output:
-  3.a) HES0 & HES1 both increase when moving the knob north (magnets further away) and decrease when moving the knob south -> Everything is correct.
-  3.b) HES0 & HES1 both decrease when moving the knob south (magnets closer by) -> Everything is correct.
+  3.a) HES1 & HES2 both increase when moving the knob north (magnets further away) and decrease when moving the knob south -> Everything is correct.
+  3.b) HES1 & HES2 both decrease when moving the knob south (magnets closer by) -> Everything is correct.
   3.c) The sensorpair acts in the opposite direction (ie. increasing when the magnets get closer by ). You probably have mixed up the poles of the magnets.
        Invert the sensorpair in the INVERTLIST.
   3.c) Another output is showing movement: Swap the pins in the PINLIST. This shouldn't happen when the PCB is used. Debugging is rather difficult when
@@ -76,7 +72,7 @@ If you have mounted the magnets upside-down, the values will be inverted.
 5. Repeat this with every axis and every sensor pair until you have a valid PINLIST and maybe an INVERTLIST
 */
 
-// HES0, HES1, HES2, HES3, HES6, HES7, HES8, HES9
+// HES1, HES2, HES3, HES4, HES5, HES6, HES7, HES8
 
 // --- Sensor Pin Definitions ---
 // ---------M---------
@@ -110,7 +106,7 @@ If you have mounted the magnets upside-down, the values will be inverted.
 // invert the value. Usually the inversion should be configured by HES-pair (ie. 0 & 1, 2 & 3, 6 & 7, 8 & 9)
 #define INVERTLIST \
   { 0, 0, 0, 0, 0, 0, 0, 0 }
-// HES0, HES1, HES2, HES3, HES6, HES7, HES8, HES9
+// HES1, HES2, HES3, HES4, HES5, HES6, HES7, HES8
 
 /* Second calibration: Tune Deadzone
 ====================================
@@ -120,7 +116,7 @@ Semi-automatic: Set debug = 11. Don't touch the mouse and observe the automatic 
 Manual:         Set debug = 2.  Don't touch the mouse but observe the values. They should be nearly to zero.
                                 Every value around zero which is noise or should be neglected afterwards is in the following deadzone.
 */
-#define DEADZONE 50  //15  // Recommended to have this as small as possible to allow full range of motion.
+#define DEADZONE 75  //15  // Recommended to have this as small as possible to allow full range of motion.
 
 // a dead zone above the following value will be warned
 #define DEADZONEWARNING 50
@@ -158,25 +154,25 @@ Recommended calibration procedure for min/max ADC levels
  Chart:
  maxVals      | minVals
 -------------------------------
- HES0+:         | HES0-:
  HES1+:         | HES1-:
  HES2+:         | HES2-:
  HES3+:         | HES3-:
+ HES4+:         | HES4-:
+ HES5+:         | HES5-:
  HES6+:         | HES6-:
  HES7+:         | HES7-:
  HES8+:         | HES8-:
- HES9+:         | HES9-:
 
-3. (a) Start out with HES0 (positive Values)
-   (b) Start moving the your Spacemouse and try increasing the Value of HES0 till you can't get a higher value out of it.
-   (c) this is your positive maximum value for HES0 so write it down for HES0
-4. Do the same for HES1,HES2,HES3,....HES9
+3. (a) Start out with HES1 (positive Values)
+   (b) Start moving the your Spacemouse and try increasing the Value of HES1 till you can't get a higher value out of it.
+   (c) this is your positive maximum value for HES1 so write it down for HES1
+4. Do the same for HES2,HES3,HES4,....HES8
 5. Do the same for your negative Values to populate the minVals
 6. Write all the positive Values starting from the top into the Array maxValues
 7. Write all the negative Values starting from the top into the Array minValues
 8. You finished calibrating.
 
-Insert measured Values like this: {HES0, HES1, HES2, HES3, HES6, HES7, HES8, HES9}
+Insert measured Values like this: {HES1, HES2, HES3, HES4, HES5, HES6, HES7, HES8}
 */
 
 

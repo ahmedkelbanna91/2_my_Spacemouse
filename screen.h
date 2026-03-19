@@ -17,7 +17,9 @@ void setupDisplay() {
   // Initialize OLED Display
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   u8g2.begin();
+}
 
+void showBootscreen() {
   u8g2.clearBuffer();                  // clear the internal memory
   u8g2.setFont(u8g2_font_ncenB08_tr);  // choose a suitable font
   String bootscreen = "3D Mouse Booting...";

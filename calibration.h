@@ -267,3 +267,106 @@ void updateFrequencyReport() {
     iterationsPerSecond = 0;         // reset iteration counter
   }
 }
+
+
+void checkCalibrationCMD(bool LED_, int16_t* velocity) {
+  static bool lastLEDState = false;
+  static uint8_t BlinkCount = 0;
+  static unsigned long firstBlinkTime = 0;
+  static unsigned long last_led_state_delay = 0;
+  static bool timerRunning = false;
+  static bool commandSent = false;
+
+  if (millis() - last_led_state_delay > 10) {
+    if (LED_ != lastLEDState) {
+      lastLEDState = LED_;
+
+      if (!timerRunning) {
+        timerRunning = true;
+        firstBlinkTime = millis();
+        BlinkCount = 1;
+        commandSent = false;
+      } else if (!commandSent) {
+        BlinkCount++;
+      }
+    }
+
+    if (timerRunning && (millis() - firstBlinkTime > LED_BLINKING_COUNT_CALIBRATION_DELAY)) {
+      BlinkCount = 0;
+      timerRunning = false;
+      commandSent = false;
+    }
+    last_led_state_delay = millis();
+
+    if (timerRunning && BlinkCount >= 14 && !commandSent) {
+#ifdef LEDpin
+      showled(0, 0, MaxLEDbrightness);
+#endif
+      sendToSpaceMouse("q00");
+      sendToSpaceMouse("n?");
+      sendToSpaceMouse("z");
+      // sendToSpaceMouse("m0");
+      snprintf(lastMessage, sizeof(lastMessage), "Calibrating");
+      lastMessageCompleted = false;
+      commandSent = true;
+      BlinkCount = 0;
+      timerRunning = false;
+      return;
+    }
+
+    if (timerRunning && BlinkCount >= 4 && !commandSent) {
+      showled(0, 0, MaxLEDbrightness);
+    } else {
+      if (isSleeping) {
+        fade(true, true, 10, MaxLEDbrightness - 100, 1, 10, false);
+      } else {
+        updateLEDsBasedOnMotion(LED_);
+        updateLEDsBasedOnMotion(velocity, LED_);
+      }
+    }
+    //     DPRINT(F("LEDstate: "));
+    //     DPRINT(LED_);
+    //     DPRINT(F("      BlinkCount: "));
+    //     DPRINTLN(BlinkCount);
+  }
+}
+
+// void autoCalibrateAndSleep() {
+//   static unsigned long lastActivityTime = 0;
+//   static bool isCalibrated = false;
+
+//   bool activity = transData[0] != 0 || transData[1] != 0 || transData[2] != 0 || rotData[0] != 0 || rotData[1] != 0 || rotData[2] != 0 || buttonsData != 0;
+
+//   if (activity) {
+//     lastActivityTime = millis();
+//     if (isSleeping) {
+//       isSleeping = false;
+//       snprintf(lastMessage, sizeof(lastMessage), "Waking up...");
+//       // lastMessageCompleted = false;
+//     }
+//     isCalibrated = false;
+//     return;
+//   }
+
+//   unsigned long idleTime = millis() - lastActivityTime;
+
+//   // First level: Auto-calibration
+//   if (!isCalibrated && idleTime > CALIBRATION_TIMEOUT) {
+//     showled(0, 0, MaxLEDbrightness);
+//     sendToSpaceMouse("q00");
+//     sendToSpaceMouse("n?");
+//     sendToSpaceMouse("z");
+//     snprintf(lastMessage, sizeof(lastMessage), "Calibrating");
+//     lastMessageCompleted = false;
+//     isCalibrated = true;
+//   }
+
+//   if (!isSleeping && idleTime > SLEEP_TIMEOUT) {
+//     // sendToSpaceMouse("m0");
+//     snprintf(lastMessage, sizeof(lastMessage), "Sleeping...");
+//     snprintf(modeLabel, sizeof(modeLabel), "%s", lastMessage);
+//     isSleeping = true;
+
+//     DPRINTLN("Entering Sleep Mode.");
+//   }
+// }

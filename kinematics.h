@@ -10,15 +10,15 @@
 
 // SECTION HALLEFFECT
 // When using HallE sensors in centered or rawValues array
-#define HES0 0
-#define HES1 1
-#define HES2 2
-#define HES3 3
+#define HES1 0
+#define HES2 1
+#define HES3 2
+#define HES4 3
 
-#define HES6 4
-#define HES7 5
-#define HES8 6
-#define HES9 7
+#define HES5 4
+#define HES6 5
+#define HES7 6
+#define HES8 7
 // !SECTION HALLEFFECT
 
 // Define position in velocity array.
@@ -35,9 +35,10 @@ int invertList[8] = INVERTLIST;
 
 
 SimpleKalmanFilter *kalmanFilters[8];
+// float KalmanFilterValues[3] = { 5.0, 2.0, 0.01 };
+float KalmanFilterValues[3] = { 2.0, 4.0, 0.01 };
 
 void setupkalmanFilters() {
-  float KalmanFilterValues[3] = { 5.0, 2.0, 0.01 };
   for (int i = 0; i < 8; i++) {
     // Parameters: Kalman gain for position, Kalman gain for velocity, measurement error
     kalmanFilters[i] = new SimpleKalmanFilter(
@@ -54,7 +55,6 @@ void setupkalmanFilters() {
 void readAllFromSensors(int *rawReads) {
   for (int i = 0; i < 8; i++) {
     int filteredValue = kalmanFilters[i]->updateEstimate(analogRead(pinList[i]));
-
     if (invertList[i] == 1) {
       rawReads[i] = analogMax_Resolution - filteredValue;  // invert the reading
     } else {
@@ -74,15 +74,15 @@ int maxVals[8] = MAXVALS;
 void FilterAnalogReadOuts(int *centered) {
   // Filter movement values. Set to zero if movement is below deadzone threshold.
   for (int i = 0; i < 8; i++) {
-    if (centered[i] < DEADZONE && centered[i] > -DEADZONE) {
+    if (centered[i] <= DEADZONE && centered[i] >= -DEADZONE) {
       centered[i] = 0;
     } else {
-      if (centered[i] < 0) {  // if the value is smaller 0 ...
-        // ... map the value from the [min,-DEADZONE] to [-350,0]
-        centered[i] = map(centered[i], minVals[i], -DEADZONE, -TOTALSENSITIVITY, 0);
-      } else {  // if the value is > 0 ...
+      if (centered[i] > DEADZONE) {  // if the value is smaller 0 ...
         // ... map the values from the [DEADZONE,max] to [0,+350]
         centered[i] = map(centered[i], DEADZONE, maxVals[i], 0, TOTALSENSITIVITY);
+      } else {  // if the value is > 0 ...
+        // ... map the value from the [min,-DEADZONE] to [-350,0]
+        centered[i] = map(centered[i], minVals[i], -DEADZONE, -TOTALSENSITIVITY, 0);
       }
     }
   }
@@ -91,22 +91,22 @@ void FilterAnalogReadOuts(int *centered) {
 void _calculateKinematicSensors(int *centered, int16_t *velocity) {
 
   // calculate sensors transX
-  velocity[TRANSX] = (centered[HES1] - centered[HES0] + centered[HES6] - centered[HES7]) / 2;
+  velocity[TRANSX] = (centered[HES2] - centered[HES1] + centered[HES5] - centered[HES6]) / 2;
 
   // calculate sensors transY
-  velocity[TRANSY] = (centered[HES2] - centered[HES3] + centered[HES9] - centered[HES8]) / 2;
+  velocity[TRANSY] = (centered[HES3] - centered[HES4] + centered[HES8] - centered[HES7]) / 2;
 
   // calculate sensors transZ
-  velocity[TRANSZ] = (centered[HES0] + centered[HES1] + centered[HES2] + centered[HES3] + centered[HES6] + centered[HES7] + centered[HES8] + centered[HES9]) / 4;
+  velocity[TRANSZ] = (centered[HES1] + centered[HES2] + centered[HES3] + centered[HES4] + centered[HES5] + centered[HES6] + centered[HES7] + centered[HES8]) / 4;
 
   // rotX
-  velocity[ROTX] = (centered[HES0] + centered[HES1] - centered[HES6] - centered[HES7]) / 2;
+  velocity[ROTX] = (centered[HES1] + centered[HES2] - centered[HES5] - centered[HES6]) / 2;
 
   // rotY
-  velocity[ROTY] = (centered[HES8] + centered[HES9] - centered[HES2] - centered[HES3]) / 2;
+  velocity[ROTY] = (centered[HES7] + centered[HES8] - centered[HES3] - centered[HES4]) / 2;
 
   // rotZ
-  velocity[ROTZ] = (centered[HES0] + centered[HES2] + centered[HES6] + centered[HES8] - centered[HES1] - centered[HES3] - centered[HES7] - centered[HES9]) / 4;
+  velocity[ROTZ] = (centered[HES1] + centered[HES3] + centered[HES5] + centered[HES7] - centered[HES2] - centered[HES4] - centered[HES6] - centered[HES8]) / 4;
 }
 
 /// @brief Function to modify the input value according to different mathematic modes. Choose the mathematical function in config.h as modFunc

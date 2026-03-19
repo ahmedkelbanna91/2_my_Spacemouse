@@ -41,11 +41,11 @@ int16_t velocity[6];
 
 
 void setup() {
+  setupDisplay();
   setupUSB();
+  showBootscreen();
 
   analogReadResolution(analogRead_Resolution);
-
-  setupDisplay();
 
   setupkalmanFilters();
   busyZeroing(centerPoints, 500, true);
@@ -167,9 +167,7 @@ void loop() {
                                                  velocity[TRANSX], velocity[TRANSY], velocity[TRANSZ],
                                                  keyState, debug);
 
-  SpaceMouseHID.sendBattery(42, false);
+  SpaceMouseHID.sendBattery(10, true);
 
-#ifdef LEDpin
-  updateLEDsBasedOnMotion(velocity, SpaceMouseHID.getLed());
-#endif
+  checkCalibrationCMD(SpaceMouseHID.getLed(), velocity);
 }  // end loop()
